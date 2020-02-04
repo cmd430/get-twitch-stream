@@ -4,21 +4,23 @@ const { escape } = require('querystring')
 /*
  Example Usage
 
-    let twitch = new Twitch({
-      channel: 'TwitchUser'
-    })
+  let twitch = new Twitch({
+    channel: 'TwitchUser'
+  })
 
-    async function test () {
+  async function test () {
+    try {
       let url = await twitch.getStreamURL()
       console.log(url)
-
       let meta = await twitch.getStreamMeta()
       console.log(meta)
+    } catch (error) {
+      console.error(error)
     }
+  }
 
-    test()
+  test()
 */
-
 
 class Twitch {
 
@@ -36,24 +38,36 @@ class Twitch {
   }
 
   async getStreamURL () {
-    let raw = await this.__getStreamRAW()
-    return Promise.resolve(raw.url)
+    try {
+      let raw = await this.__getStreamRAW()
+      return Promise.resolve(raw.url)
+    } catch (error) {
+      return Promise.reject(error)
+    }
   }
 
   async getStreamMeta () {
-    let raw = await this.__getStreamRAW()
-    return Promise.resolve(raw.stream_info)
+    try {
+      let raw = await this.__getStreamRAW()
+      return Promise.resolve(raw.stream_info)
+    } catch (error) {
+      return Promise.reject(error)
+    }
   }
 
   async __getStreamRAW () {
-    this.__auth = await this.__getAuth()
-    this.__m3u8 = await this.__getStreamManifest()
-    this.__m3u8Parsed = await this.__parseStreamManifest()
+    try {
+      this.__auth = await this.__getAuth()
+      this.__m3u8 = await this.__getStreamManifest()
+      this.__m3u8Parsed = await this.__parseStreamManifest()
 
-    if (this.audio_only) {
-      return Promise.resolve(this.__m3u8Parsed.streams[this.__m3u8Parsed.streams.length - 1]) // Audio
-    } else {
-      return this.__m3u8Parsed.streams[0] // Source
+      if (this.audio_only) {
+        return Promise.resolve(this.__m3u8Parsed.streams[this.__m3u8Parsed.streams.length - 1]) // Audio
+      } else {
+        return this.__m3u8Parsed.streams[0] // Source
+      }
+    } catch (error) {
+      return Promise.reject(error)
     }
   }
 
@@ -77,9 +91,9 @@ class Twitch {
             return resolve(JSON.parse(data))
           })
         } else {
-          reject({
+          return reject({
             code: res.statusCode,
-            message: 'invaild status code'
+            message: 'unable to get twitch auth'
           })
         }
       })
@@ -110,10 +124,18 @@ class Twitch {
             return resolve(data.toString())
           })
         } else {
-          reject({
-            code: res.statusCode,
-            message: 'invaild status code'
-          })
+          if (res.statusCode === 404) {
+            return reject({
+              code: res.statusCode,
+              message: `${this.channel} is offline`
+            })
+          } else {
+            return reject({
+              code: res.statusCode,
+              message: 'invaild status code'
+            })
+          }
+
         }
       })
       .on('error', e => {
