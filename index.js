@@ -250,8 +250,4 @@ class Twitch {
 
 }
 
-module.exports = {
-
-  Twitch: Twitch
-
-}
+module.exports = Twitch
