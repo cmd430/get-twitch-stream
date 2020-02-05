@@ -10,10 +10,14 @@ const { escape } = require('querystring')
 
   async function test () {
     try {
-      let url = await twitch.getStreamURL()
+
+      let availableQualities = await twitch.getStreamQualities()
+      console.log(availableQualities)
+
+      let url = await twitch.getStreamURL([
+        'source'
+      ])
       console.log(url)
-      let meta = await twitch.getStreamMeta()
-      console.log(meta)
     } catch (error) {
       console.error(error)
     }
@@ -30,26 +34,35 @@ class Twitch {
     }
 
     this.channel = opts.channel
-    this.audio_only = opts.audio_only !== undefined ? opts.audio_only : false
-
-    this.__auth = {}
-    this.__m3u8 = null
-
   }
 
-  async getStreamURL () {
+  async getStreamURL (qualities = [ 'source' ]) {
     try {
       let raw = await this.__getStreamRAW()
-      return Promise.resolve(raw.url)
+
+      if (Array.isArray(qualities) && qualities.length > 0) {
+        let streamQuality = qualities.find(quality => {
+          return raw.stream_qualities.includes(quality)
+        })
+
+        if (streamQuality !== undefined) {
+          return Promise.resolve(raw.streams[streamQuality].url)
+        } else {
+          return Promise.reject(new Error(`no streams found for ${qualities.length > 1 ? 'qualities' : 'quality'} '${qualities}'`))
+        }
+      } else {
+        return Promise.reject(new Error('invalid quality, must be array containing vaild quality'))
+      }
     } catch (error) {
       return Promise.reject(error)
     }
   }
 
-  async getStreamMeta () {
+  async getStreamQualities () {
     try {
       let raw = await this.__getStreamRAW()
-      return Promise.resolve(raw.stream_info)
+
+      return Promise.resolve(raw.stream_qualities)
     } catch (error) {
       return Promise.reject(error)
     }
@@ -57,15 +70,9 @@ class Twitch {
 
   async __getStreamRAW () {
     try {
-      this.__auth = await this.__getAuth()
-      this.__m3u8 = await this.__getStreamManifest()
-      this.__m3u8Parsed = await this.__parseStreamManifest()
-
-      if (this.audio_only) {
-        return Promise.resolve(this.__m3u8Parsed.streams[this.__m3u8Parsed.streams.length - 1]) // Audio
-      } else {
-        return this.__m3u8Parsed.streams[0] // Source
-      }
+      let auth = await this.__getAuth()
+      let m3u8 = await this.__getStreamManifest(auth)
+      return this.__parseStreamManifest(m3u8)
     } catch (error) {
       return Promise.reject(error)
     }
@@ -91,10 +98,7 @@ class Twitch {
             return resolve(JSON.parse(data))
           })
         } else {
-          return reject({
-            code: res.statusCode,
-            message: 'unable to get twitch auth'
-          })
+          return reject(new Error('unable to get twitch auth'))
         }
       })
       .on('error', e => {
@@ -104,12 +108,12 @@ class Twitch {
     })
   }
 
-  __getStreamManifest () {
+  __getStreamManifest (auth) {
     return new Promise((resolve, reject) => {
       https.request({
         hostname: 'usher.ttvnw.net',
         port: 443,
-        path: `/api/channel/hls/${this.channel}.m3u8?allow_source=true&allow_audio_only=true&allow_spectre=false&sig=${this.__auth.sig}&token=${escape(this.__auth.token)}`,
+        path: `/api/channel/hls/${this.channel}.m3u8?allow_source=true&allow_audio_only=true&allow_spectre=false&sig=${auth.sig}&token=${escape(auth.token)}`,
         method: 'GET',
         headers: {
           'Client-ID': 'kimne78kx3ncx6brgo4mv6wki5h1ko'
@@ -125,17 +129,10 @@ class Twitch {
           })
         } else {
           if (res.statusCode === 404) {
-            return reject({
-              code: res.statusCode,
-              message: `${this.channel} is offline`
-            })
+            return reject(new Error(`${this.channel} is offline`))
           } else {
-            return reject({
-              code: res.statusCode,
-              message: 'invaild status code'
-            })
+            return reject(new Error(res.statusMessage))
           }
-
         }
       })
       .on('error', e => {
@@ -190,18 +187,19 @@ class Twitch {
     return value
   }
 
-  __parseStreamManifest () {
+  __parseStreamManifest (m3u8) {
     return new Promise((resolve, reject) => {
       let parsed = {
         twitch_info: {},
-        streams: []
+        streams: {},
+        stream_qualities: []
       }
       let meta = {
         media: {},
         stream_info: {},
         url: null
       }
-      this.__m3u8.split(/[\r\n]/).forEach((data, index) => {
+      m3u8.split(/[\r\n]/).forEach((data, index) => {
         if (data !== '#EXTM3U') {
           if (data.startsWith('#EXT-X-TWITCH-INFO')) {
             parsed.twitch_info = this.__getKeyValuePairs(data)
@@ -209,7 +207,18 @@ class Twitch {
             switch(index % 3) {
               case 2:
                 // X-MEDIA
-                meta.media = this.__getKeyValuePairs(data)
+                let parsedKeyValuePairs = this.__getKeyValuePairs(data)
+                if (parsedKeyValuePairs.type === 'VIDEO') {
+                  if (parsedKeyValuePairs.name.includes('(source)')) {
+                    parsed.stream_qualities.push('source')
+                    parsed.stream_qualities.push(parsedKeyValuePairs.name.replace('(source)', '').trim())
+                  } else {
+                    parsed.stream_qualities.push(parsedKeyValuePairs.name)
+                  }
+                } else if (parsedKeyValuePairs.type === 'AUDIO') {
+                  parsed.stream_qualities.push('audio')
+                }
+                meta.media = parsedKeyValuePairs
                 break;
               case 0:
                 // X-STREAM
@@ -218,7 +227,14 @@ class Twitch {
               case 1:
                 // M3U8 URL
                 meta.url = data
-                parsed.streams.push(meta)
+                if (meta.media.name.includes('(source)')) {
+                  parsed.streams['source'] = meta
+                  parsed.streams[meta.media.name.replace('(source)', '').trim()] = meta
+                } else if (meta.media.name === 'audio_only') {
+                  parsed.streams['audio'] = meta
+                } else {
+                  parsed.streams[meta.media.name] = meta
+                }
                 meta = {
                   media: {},
                   stream_info: {},
