@@ -68,6 +68,21 @@ class Twitch {
     }
   }
 
+  async streamLive () {
+    try {
+      let auth = await this.__getAuth()
+
+      await this.__getStreamManifest(auth)
+
+      return Promise.resolve(true)
+    } catch (error) {
+      if (error.message.includes('is offline')) {
+        return Promise.resolve(false)
+      }
+      return Promise.reject(error)
+    }
+  }
+
   async __getStreamRAW () {
     try {
       let auth = await this.__getAuth()
