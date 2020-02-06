@@ -33,7 +33,7 @@ class Twitch {
       throw new Error('opts.channel must be set')
     }
 
-    this.channel = opts.channel
+    this.channel = opts.channel.toLowerCase()
   }
 
   async getStreamURL (qualities = [ 'source' ]) {
@@ -76,10 +76,11 @@ class Twitch {
 
       return Promise.resolve(true)
     } catch (error) {
-      if (error.message.includes('is offline')) {
+      if (error.message === `${this.channel} is offline`) {
         return Promise.resolve(false)
+      } else {
+        return Promise.reject(error)
       }
-      return Promise.reject(error)
     }
   }
 
