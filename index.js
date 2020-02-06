@@ -129,7 +129,7 @@ class Twitch {
       https.request({
         hostname: 'usher.ttvnw.net',
         port: 443,
-        path: `/api/channel/hls/${this.channel}.m3u8?allow_source=true&allow_audio_only=true&allow_spectre=false&sig=${auth.sig}&token=${escape(auth.token)}`,
+        path: `/api/channel/hls/${this.channel}.m3u8?player=twitchweb&allow_source=true&allow_audio_only=true&allow_spectre=false&sig=${auth.sig}&token=${escape(auth.token)}&type=any`,
         method: 'GET',
         headers: {
           'Client-ID': 'kimne78kx3ncx6brgo4mv6wki5h1ko'
