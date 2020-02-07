@@ -145,7 +145,7 @@ class Twitch {
             data += d
           })
           res.on('end', () => {
-            return resolve(JSON.parse(data).status)
+            return resolve(JSON.parse(data))
           })
         } else {
           return reject(new Error('unable to get twitch auth'))
