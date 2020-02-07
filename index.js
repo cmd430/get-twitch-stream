@@ -1,4 +1,4 @@
-const https = require('https')
+const { request } = require('https')
 const { escape } = require('querystring')
 
 /*
@@ -34,6 +34,8 @@ class Twitch {
     }
 
     this.channel = opts.channel.toLowerCase()
+    
+    this.__client_id = 'kimne78kx3ncx6brgo4mv6wki5h1ko'
   }
 
   async getStreamURL (qualities = [ 'source' ]) {
@@ -83,6 +85,38 @@ class Twitch {
       }
     }
   }
+  
+  getStreamTitle (channel) {
+    return new Promise((p_resolve, p_reject) => {
+      request({
+        hostname: 'api.twitch.tv',
+        port: 443,
+        path: `/api/channels/${this.channel}`,
+        method: 'GET',
+        headers: {
+          'Client-ID': `${this.__client_id}`
+        }
+      }, res => {
+        if (res.statusCode === 200) {
+          let data = ''
+          res.on('data', d => {
+            data += d
+          })
+          res.on('end', () => {
+            return p_resolve(JSON.parse(data).status)
+          })
+        } else {
+          return p_resolve('Unknown Stream Title')
+        }
+      })
+      .on('error', e => {
+        debug(e.message)
+
+        return p_resolve('Unknown Stream Title')
+      })
+      .end()
+    })
+  }
 
   async __getStreamRAW () {
     try {
@@ -96,13 +130,13 @@ class Twitch {
 
   __getAuth () {
     return new Promise((resolve, reject) => {
-      https.request({
+      request({
         hostname: 'api.twitch.tv',
         port: 443,
         path: `/api/channels/${this.channel}/access_token`,
         method: 'GET',
         headers: {
-          'Client-ID': 'kimne78kx3ncx6brgo4mv6wki5h1ko'
+          'Client-ID': `${this.__client_id}`
         }
       }, res => {
         if (res.statusCode === 200) {
@@ -111,7 +145,7 @@ class Twitch {
             data += d
           })
           res.on('end', () => {
-            return resolve(JSON.parse(data))
+            return resolve(JSON.parse(data).status)
           })
         } else {
           return reject(new Error('unable to get twitch auth'))
@@ -126,13 +160,13 @@ class Twitch {
 
   __getStreamManifest (auth) {
     return new Promise((resolve, reject) => {
-      https.request({
+      request({
         hostname: 'usher.ttvnw.net',
         port: 443,
         path: `/api/channel/hls/${this.channel}.m3u8?player=twitchweb&allow_source=true&allow_audio_only=true&allow_spectre=false&sig=${auth.sig}&token=${escape(auth.token)}&type=any`,
         method: 'GET',
         headers: {
-          'Client-ID': 'kimne78kx3ncx6brgo4mv6wki5h1ko'
+          'Client-ID': `${this.__client_id}`
         }
       }, res => {
         if (res.statusCode === 200) {
