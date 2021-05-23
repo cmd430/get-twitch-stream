@@ -129,14 +129,30 @@ class Twitch {
   }
 
   __getAuth () {
+    const postData = JSON.stringify({
+      query: `
+        query {
+          streamPlaybackAccessToken(channelName: "${this.channel}", params: {
+            platform: "web",
+            playerBackend: "mediaplayer",
+            playerType: "site"
+          }) {
+            value
+            signature
+          }
+        }
+      `
+    })
+    
     return new Promise((resolve, reject) => {
-      request({
-        hostname: 'api.twitch.tv',
+      const req = request({
+        hostname: 'gql.twitch.tv',
         port: 443,
-        path: `/api/channels/${this.channel}/access_token`,
-        method: 'GET',
+        path: '/gql',
+        method: 'POST',
         headers: {
-          'Client-ID': `${this.__client_id}`
+          'Client-ID': `${this.__client_id}`,
+          'Content-Length': postData.length
         }
       }, res => {
         if (res.statusCode === 200) {
@@ -145,16 +161,21 @@ class Twitch {
             data += d
           })
           res.on('end', () => {
-            return resolve(JSON.parse(data))
+            data = JSON.parse(data).data
+            return resolve({
+              sig: data.streamPlaybackAccessToken.signature,
+              token: data.streamPlaybackAccessToken.value
+            })
           })
         } else {
           return reject(new Error('unable to get twitch auth'))
         }
       })
-      .on('error', e => {
+      req.on('error', e => {
         return reject(e)
       })
-      .end()
+      req.write(postData)
+      req.end()
     })
   }
 
