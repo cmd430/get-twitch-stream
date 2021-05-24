@@ -86,15 +86,43 @@ class Twitch {
     }
   }
   
-  getStreamTitle (channel) {
-    return new Promise((p_resolve, p_reject) => {
-      request({
-        hostname: 'api.twitch.tv',
+  async getStreamTitle () {
+    return (await this.__getStreamMeta()).title
+  }
+  
+  async getStreamGame () {
+    return (await this.__getStreamMeta()).game
+  }
+  
+  async getStreamMeta () {
+    return (await this.__getStreamMeta())
+  }
+  
+  __getStreamMeta () {
+    const postData = JSON.stringify({
+      query: `
+        query {
+          user(login: "${this.channel}") {
+            stream {
+              title
+              game {
+                name
+              }
+            }
+          }
+        }
+      `
+    })
+
+    return new Promise((resolve, reject) => {
+      const req = request({
+        hostname: 'gql.twitch.tv',
         port: 443,
-        path: `/api/channels/${this.channel}`,
-        method: 'GET',
+        path: '/gql',
+        method: 'POST',
         headers: {
-          'Client-ID': `${this.__client_id}`
+          'Client-ID': `${this.__client_id}`,
+          'Content-Length': postData.length
         }
       }, res => {
         if (res.statusCode === 200) {
@@ -103,18 +131,24 @@ class Twitch {
             data += d
           })
           res.on('end', () => {
-            return p_resolve(JSON.parse(data).status)
+            data = JSON.parse(data).data
+            return resolve({
+              title: data.user.stream?.title ?? 'Unknown stream title',
+              game: data.user.stream?.game.name ?? 'Unknown stream game'
+            })
           })
         } else {
-          return p_resolve('Unknown Stream Title')
+          return reject({
+            title: 'Unknown stream title',
+            game: 'Unknown stream game'
+          })
         }
       })
-      .on('error', e => {
-        debug(e.message)
-
-        return p_resolve('Unknown Stream Title')
+      req.on('error', e => {
+        return reject(e)
       })
-      .end()
+      req.write(postData)
+      req.end()
     })
   }
 
