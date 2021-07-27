@@ -29,12 +29,14 @@ const { escape } = require('querystring')
 class Twitch {
 
   constructor (opts = {}) {
+    if (opts.auth === undefined) opts.auth = null
     if (opts.channel === undefined || opts.channel === '') {
       throw new Error('opts.channel must be set')
     }
 
     this.channel = opts.channel.toLowerCase()
-    
+
+    this.__client_auth = opts.auth
     this.__client_id = 'kimne78kx3ncx6brgo4mv6wki5h1ko'
   }
 
@@ -85,19 +87,19 @@ class Twitch {
       }
     }
   }
-  
+
   async getStreamTitle () {
     return (await this.__getStreamMeta()).title
   }
-  
+
   async getStreamGame () {
     return (await this.__getStreamMeta()).game
   }
-  
+
   async getStreamMeta () {
     return (await this.__getStreamMeta())
   }
-  
+
   __getStreamMeta () {
     const postData = JSON.stringify({
       query: `
@@ -177,7 +179,7 @@ class Twitch {
         }
       `
     })
-    
+
     return new Promise((resolve, reject) => {
       const req = request({
         hostname: 'gql.twitch.tv',
@@ -186,6 +188,7 @@ class Twitch {
         method: 'POST',
         headers: {
           'Client-ID': `${this.__client_id}`,
+          'Authorization': this.__client_auth ? `OAuth ${this.__client_auth}` : '',
           'Content-Length': postData.length
         }
       }, res => {
