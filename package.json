@@ -1,6 +1,6 @@
 {
   "name": "get-twitch-stream",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Get url to twitch stream m3u8 file",
   "main": "index.js",
   "author": "Bradley 'cmd430' Treweek",
