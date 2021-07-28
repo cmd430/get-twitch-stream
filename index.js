@@ -29,12 +29,14 @@ const { escape } = require('querystring')
 class Twitch {
 
   constructor (opts = {}) {
-    if (opts.auth === undefined) opts.auth = null
     if (opts.channel === undefined || opts.channel === '') {
       throw new Error('opts.channel must be set')
     }
+    if (opts.lowLatency === undefined) opts.lowLatency = false
+    if (opts.auth === undefined) opts.auth = null
 
     this.channel = opts.channel.toLowerCase()
+    this.low_latency = opts.lowLatency
 
     this.__client_auth = opts.auth
     this.__client_id = 'kimne78kx3ncx6brgo4mv6wki5h1ko'
@@ -221,7 +223,7 @@ class Twitch {
       request({
         hostname: 'usher.ttvnw.net',
         port: 443,
-        path: `/api/channel/hls/${this.channel}.m3u8?player=twitchweb&allow_source=true&allow_audio_only=true&allow_spectre=false&sig=${auth.sig}&token=${escape(auth.token)}&type=any`,
+        path: `/api/channel/hls/${this.channel}.m3u8?allow_source=true&allow_audio_only=true&fast_bread=${this.low_latency}&player_backend=mediaplayer&playlist_include_framerate=true&reassignments_supported=true&supported_codecs=vp09,avc1&cdm=wv&sig=${auth.sig}&token=${escape(auth.token)}&p=${Math.floor(100000 + Math.random() * 900000)}&type=any`, //&player_version=1.4.0
         method: 'GET',
         headers: {
           'Client-ID': `${this.__client_id}`
